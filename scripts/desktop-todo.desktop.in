@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Desktop Todo
+Comment=Start the desktop task widget
+Exec=@LAUNCHER@ start
+Terminal=false
+X-GNOME-Autostart-enabled=true

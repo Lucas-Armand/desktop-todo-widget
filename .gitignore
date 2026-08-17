@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# Never publish credentials, tokens, or personal task data.
+client_secret*.json
+google_token.json
+authorization_url.txt
+authorization_url.json
+tasks.json
+tasks.md
+config.json
+*.log

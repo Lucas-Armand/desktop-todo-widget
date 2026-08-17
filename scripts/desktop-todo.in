@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_HOME="@APP_HOME@"
+export PYTHONPATH="$APP_HOME${PYTHONPATH:+:$PYTHONPATH}"
+
+case "${1:-start}" in
+  start)
+    pgrep -f "python3 -m desktop_todo$" >/dev/null || nohup /usr/bin/python3 -m desktop_todo >/dev/null 2>&1 &
+    ;;
+  stop)
+    pkill -f "python3 -m desktop_todo$" 2>/dev/null || true
+    ;;
+  restart)
+    pkill -f "python3 -m desktop_todo$" 2>/dev/null || true
+    nohup /usr/bin/python3 -m desktop_todo >/dev/null 2>&1 &
+    ;;
+  position|width)
+    /usr/bin/python3 -m desktop_todo.configure "$@"
+    echo "Run 'desktop-todo restart' to apply the change."
+    ;;
+  *)
+    echo "Usage: desktop-todo [start|stop|restart|position X Y|width PIXELS|auto]" >&2
+    exit 2
+    ;;
+esac
