@@ -1,4 +1,4 @@
-# Desktop Todo Widget Starter
+# Desktop Todo Widget Ubuntu/GNOME Starter
 
 A small, clickable GTK task list that sits on an Ubuntu desktop. Tasks live in
 a Markdown note, which can be placed inside an Obsidian vault, and may optionally
