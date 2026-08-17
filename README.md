@@ -8,6 +8,10 @@ sync with a dedicated Google Tasks list.
 > small and readable so you can fork it, understand it, and adapt its behavior
 > to your desktop environment.
 
+## Demo
+
+![Desktop Todo Widget demo](assets/demo.gif)
+
 ## What it includes
 
 - clickable add, complete, delete, clear, and reorder controls;
