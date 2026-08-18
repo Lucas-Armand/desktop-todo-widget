@@ -47,6 +47,12 @@ class MergeTests(unittest.TestCase):
             merged,
         )
 
+    def test_does_not_restore_archived_remote_task(self):
+        client = FakeGoogleTasks([
+            {"id": "archived-1", "title": "Already done", "status": "completed"}
+        ])
+        self.assertEqual([], client.merge([], {"archived-1"}))
+
 
 if __name__ == "__main__":
     unittest.main()

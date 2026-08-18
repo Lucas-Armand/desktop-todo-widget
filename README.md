@@ -14,7 +14,7 @@ sync with a dedicated Google Tasks list.
 
 ## What it includes
 
-- clickable add, complete, delete, clear, and reorder controls;
+- clickable add, complete, delete, archive, and reorder controls;
 - configurable position and maximum width, with wrapping for long tasks;
 - a dedicated Markdown note as the local source;
 - optional two-way Google Tasks synchronization;
@@ -83,8 +83,16 @@ which Obsidian hides in Reading view:
 
 ```markdown
 - [ ] Prepare the presentation <!-- google-task:REMOTE_ID -->
+
+# DONE:
+
+## 18_08_2026
 - [x] Review the document <!-- google-task:REMOTE_ID -->
 ```
+
+`Archive completed` moves checked tasks out of the active list and into the
+current `DD_MM_YYYY` section under `# DONE:`. It does not delete their completed
+Google Tasks. The `×` control remains the explicit permanent-delete action.
 
 ## Optional Google Tasks sync
 

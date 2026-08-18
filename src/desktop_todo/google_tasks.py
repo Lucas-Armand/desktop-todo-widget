@@ -209,9 +209,11 @@ class GoogleTasks:
             params=params,
         )
 
-    def merge(self, local_tasks):
+    def merge(self, local_tasks, ignored_ids=None):
         """Initial merge avoids duplicates; Google then becomes the remote source."""
         remote = self.list_tasks()
+        ignored_ids = set(ignored_ids or ())
+        remote = [item for item in remote if item["id"] not in ignored_ids]
         by_id = {item["id"]: item for item in remote}
         claimed = set()
         merged = []

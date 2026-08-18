@@ -3,6 +3,7 @@ import json
 import os
 import re
 import threading
+from datetime import datetime
 from pathlib import Path
 
 import gi
@@ -43,6 +44,8 @@ MARKDOWN_TODO = Path(os.path.expanduser(APP_CONFIG["markdown_file"]))
 TASK_LINE = re.compile(
     r"^\s*-\s*\[([ xX])\]\s*(.*?)\s*(?:<!--\s*google-task:([^\s>]+)\s*-->)?\s*$"
 )
+DONE_HEADING = re.compile(r"^#\s+DONE:?\s*$", re.IGNORECASE)
+DATE_HEADING = re.compile(r"^##\s+(.+?)\s*$")
 
 
 CSS = b"""
@@ -105,6 +108,7 @@ class TodoWindow(Gtk.Window):
         self.google = GoogleTasks(APP_CONFIG["google_task_list"])
         self.syncing = False
         self.editor_window = None
+        self.archive = self.read_archive()
         self.tasks = self.load_tasks()
         self.markdown_mtime = self.markdown_timestamp()
         self.set_default_size(self.settings["max_width"] or 350, 100)
@@ -165,7 +169,7 @@ class TodoWindow(Gtk.Window):
         self.task_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
         panel.pack_start(self.task_box, False, False, 0)
 
-        self.clear_button = Gtk.Button(label="Clear completed")
+        self.clear_button = Gtk.Button(label="Archive completed")
         self.clear_button.set_halign(Gtk.Align.END)
         self.clear_button.get_style_context().add_class("clear-button")
         self.clear_button.get_style_context().add_class("footer-row")
@@ -215,8 +219,7 @@ class TodoWindow(Gtk.Window):
             pass
         return defaults
 
-    @staticmethod
-    def write_tasks(tasks):
+    def write_tasks(self, tasks):
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         temporary = DATA_FILE.with_suffix(".tmp")
         temporary.write_text(
@@ -231,6 +234,15 @@ class TodoWindow(Gtk.Window):
             google_id = task.get("google_id")
             suffix = f" <!-- google-task:{google_id} -->" if google_id else ""
             lines.append(f"- [{marker}] {text}{suffix}")
+        if self.archive:
+            lines.extend(["", "# DONE:"])
+            for group in self.archive:
+                lines.extend(["", f"## {group['date']}"])
+                for task in group["tasks"]:
+                    text = str(task.get("text", "")).replace("\n", " ").strip()
+                    google_id = task.get("google_id")
+                    suffix = f" <!-- google-task:{google_id} -->" if google_id else ""
+                    lines.append(f"- [x] {text}{suffix}")
         MARKDOWN_TODO.parent.mkdir(parents=True, exist_ok=True)
         temporary_md = MARKDOWN_TODO.with_suffix(".md.tmp")
         temporary_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -240,7 +252,13 @@ class TodoWindow(Gtk.Window):
     def read_markdown():
         try:
             tasks = []
+            in_done = False
             for line in MARKDOWN_TODO.read_text(encoding="utf-8").splitlines():
+                if DONE_HEADING.match(line.strip()):
+                    in_done = True
+                    continue
+                if in_done:
+                    continue
                 match = TASK_LINE.match(line)
                 if match:
                     task = {"text": match.group(2).strip(),
@@ -251,6 +269,38 @@ class TodoWindow(Gtk.Window):
             return tasks
         except OSError:
             return None
+
+    @staticmethod
+    def read_archive():
+        try:
+            groups = []
+            current = None
+            in_done = False
+            for line in MARKDOWN_TODO.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if DONE_HEADING.match(stripped):
+                    in_done = True
+                    continue
+                if not in_done:
+                    continue
+                heading = DATE_HEADING.match(stripped)
+                if heading:
+                    current = {"date": heading.group(1), "tasks": []}
+                    groups.append(current)
+                    continue
+                match = TASK_LINE.match(line)
+                if current is not None and match:
+                    task = {"text": match.group(2).strip(), "done": True}
+                    if match.group(3):
+                        task["google_id"] = match.group(3)
+                    current["tasks"].append(task)
+            return [group for group in groups if group["tasks"]]
+        except OSError:
+            return []
+
+    def archived_google_ids(self):
+        return {task["google_id"] for group in self.archive
+                for task in group["tasks"] if task.get("google_id")}
 
     @staticmethod
     def markdown_timestamp():
@@ -436,13 +486,18 @@ class TodoWindow(Gtk.Window):
             self.run_google(lambda: self.google.delete_task(google_id))
 
     def clear_completed(self, _button):
-        google_ids = [task.get("google_id") for task in self.tasks
-                      if task.get("done") and task.get("google_id")]
+        completed = [task for task in self.tasks if task.get("done")]
+        if not completed:
+            return
+        today = datetime.now().strftime("%d_%m_%Y")
+        group = next((item for item in self.archive if item["date"] == today), None)
+        if group is None:
+            group = {"date": today, "tasks": []}
+            self.archive.insert(0, group)
+        group["tasks"].extend(completed)
         self.tasks = [task for task in self.tasks if not task.get("done")]
         self.save_tasks()
         self.render_tasks()
-        if APP_CONFIG["google_sync"] and self.google.authorized and google_ids:
-            self.run_google(lambda: [self.google.delete_task(item) for item in google_ids])
 
     def set_sync_status(self, text):
         self.sync_status.set_text(text)
@@ -474,7 +529,7 @@ class TodoWindow(Gtk.Window):
 
         def authorize_and_sync():
             self.google.authorize()
-            return self.google.merge(self.tasks)
+            return self.google.merge(self.tasks, self.archived_google_ids())
         self.run_google(authorize_and_sync, self.apply_google_tasks)
 
     def sync_google(self):
@@ -485,7 +540,7 @@ class TodoWindow(Gtk.Window):
 
         def worker():
             try:
-                tasks = self.google.merge(self.tasks)
+                tasks = self.google.merge(self.tasks, self.archived_google_ids())
                 GLib.idle_add(self.apply_google_tasks, tasks)
             except Exception as exc:
                 GLib.idle_add(self.sync_failed, exc)
@@ -515,18 +570,24 @@ class TodoWindow(Gtk.Window):
         if not timestamp or timestamp == self.markdown_mtime:
             return True
         incoming = self.read_markdown()
+        incoming_archive = self.read_archive()
         self.markdown_mtime = timestamp
         if incoming is None or incoming == self.tasks:
+            self.archive = incoming_archive
             return True
 
         old_by_id = {task.get("google_id"): task for task in self.tasks
                      if task.get("google_id")}
         new_ids = {task.get("google_id") for task in incoming if task.get("google_id")}
-        deleted = [item for item in old_by_id if item not in new_ids]
+        archived_ids = {task.get("google_id") for group in incoming_archive
+                        for task in group["tasks"] if task.get("google_id")}
+        deleted = [item for item in old_by_id
+                   if item not in new_ids and item not in archived_ids]
         changed = [task for task in incoming if task.get("google_id") in old_by_id
                    and (task.get("text") != old_by_id[task["google_id"]].get("text")
                         or bool(task.get("done")) != bool(old_by_id[task["google_id"]].get("done")))]
         self.tasks = incoming
+        self.archive = incoming_archive
         self.save_tasks()
         self.render_tasks()
         self.set_sync_status("Obsidian changes detected")
@@ -537,7 +598,7 @@ class TodoWindow(Gtk.Window):
                     self.google.delete_task(task_id)
                 for task in changed:
                     self.google.update_task(task["google_id"], task["text"], task["done"])
-                return self.google.merge(self.tasks)
+                return self.google.merge(self.tasks, self.archived_google_ids())
             self.run_google(update_google, self.apply_google_tasks)
         return True
 

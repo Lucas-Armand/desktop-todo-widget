@@ -22,6 +22,10 @@ A task has `text`, `done`, and optionally `google_id`. Remote IDs are stored in
 HTML comments on their Markdown lines, which keeps the note readable in
 Obsidian. A small JSON file mirrors the current state for recovery.
 
+Completed tasks remain active until the user archives them. Archiving moves
+them under `# DONE:` and a `## DD_MM_YYYY` heading. Archived remote IDs are
+excluded from subsequent merges so completed Google Tasks do not reappear.
+
 The configured Markdown file must be a dedicated note. The widget owns and
 atomically rewrites its full contents; it does not preserve unrelated prose.
 
