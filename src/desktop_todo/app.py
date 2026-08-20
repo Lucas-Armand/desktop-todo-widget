@@ -42,7 +42,7 @@ def read_config():
 APP_CONFIG = read_config()
 MARKDOWN_TODO = Path(os.path.expanduser(APP_CONFIG["markdown_file"]))
 TASK_LINE = re.compile(
-    r"^\s*-\s*\[([ xX])\]\s*(.*?)\s*(?:<!--\s*google-task:([^\s>]+)\s*-->)?\s*$"
+    r"^(\s*)-\s*\[([ xX])\]\s*(.*?)\s*(?:<!--\s*google-task:([^\s>]+)\s*-->)?\s*$"
 )
 DONE_HEADING = re.compile(r"^#\s+DONE:?\s*$", re.IGNORECASE)
 DATE_HEADING = re.compile(r"^##\s+(.+?)\s*$")
@@ -230,19 +230,21 @@ class TodoWindow(Gtk.Window):
                  "> Synced with the desktop widget and Google Tasks.", ""]
         for task in tasks:
             marker = "x" if task.get("done") else " "
+            indent = "  " if task.get("level") else ""
             text = str(task.get("text", "")).replace("\n", " ").strip()
             google_id = task.get("google_id")
             suffix = f" <!-- google-task:{google_id} -->" if google_id else ""
-            lines.append(f"- [{marker}] {text}{suffix}")
+            lines.append(f"{indent}- [{marker}] {text}{suffix}")
         if self.archive:
             lines.extend(["", "# DONE:"])
             for group in self.archive:
                 lines.extend(["", f"## {group['date']}"])
                 for task in group["tasks"]:
+                    indent = "  " if task.get("level") else ""
                     text = str(task.get("text", "")).replace("\n", " ").strip()
                     google_id = task.get("google_id")
                     suffix = f" <!-- google-task:{google_id} -->" if google_id else ""
-                    lines.append(f"- [x] {text}{suffix}")
+                    lines.append(f"{indent}- [x] {text}{suffix}")
         MARKDOWN_TODO.parent.mkdir(parents=True, exist_ok=True)
         temporary_md = MARKDOWN_TODO.with_suffix(".md.tmp")
         temporary_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -261,10 +263,11 @@ class TodoWindow(Gtk.Window):
                     continue
                 match = TASK_LINE.match(line)
                 if match:
-                    task = {"text": match.group(2).strip(),
-                            "done": match.group(1).lower() == "x"}
-                    if match.group(3):
-                        task["google_id"] = match.group(3)
+                    task = {"text": match.group(3).strip(),
+                            "done": match.group(2).lower() == "x",
+                            "level": 1 if match.group(1) else 0}
+                    if match.group(4):
+                        task["google_id"] = match.group(4)
                     tasks.append(task)
             return tasks
         except OSError:
@@ -290,9 +293,10 @@ class TodoWindow(Gtk.Window):
                     continue
                 match = TASK_LINE.match(line)
                 if current is not None and match:
-                    task = {"text": match.group(2).strip(), "done": True}
-                    if match.group(3):
-                        task["google_id"] = match.group(3)
+                    task = {"text": match.group(3).strip(), "done": True,
+                            "level": 1 if match.group(1) else 0}
+                    if match.group(4):
+                        task["google_id"] = match.group(4)
                     current["tasks"].append(task)
             return [group for group in groups if group["tasks"]]
         except OSError:
@@ -402,6 +406,7 @@ class TodoWindow(Gtk.Window):
             row = Gtk.Box(spacing=5)
             row.get_style_context().add_class("task-row")
             check = Gtk.CheckButton(label=task["text"])
+            check.set_margin_start(18 if task.get("level") else 0)
             check.set_active(bool(task.get("done")))
             check.set_hexpand(True)
             check.get_style_context().add_class("task-check")
@@ -415,16 +420,28 @@ class TodoWindow(Gtk.Window):
             check.connect("toggled", self.toggle_task, index)
             row.pack_start(check, True, True, 0)
 
+            hierarchy = Gtk.Button(label="←" if task.get("level") else "↳")
+            hierarchy.set_tooltip_text(
+                "Move to top level" if task.get("level") else "Make subtask"
+            )
+            can_indent = (not task.get("level") and index > 0
+                          and not self.has_children(index)
+                          and self.parent_before(index) is not None)
+            hierarchy.set_sensitive(bool(task.get("level")) or can_indent)
+            hierarchy.get_style_context().add_class("reorder-button")
+            hierarchy.connect("clicked", self.toggle_hierarchy, index)
+            row.pack_start(hierarchy, False, False, 0)
+
             up = Gtk.Button(label="↑")
             up.set_tooltip_text("Move up")
-            up.set_sensitive(index > 0)
+            up.set_sensitive(self.can_move_task(index, -1))
             up.get_style_context().add_class("reorder-button")
             up.connect("clicked", self.move_task_step, index, -1)
             row.pack_start(up, False, False, 0)
 
             down = Gtk.Button(label="↓")
             down.set_tooltip_text("Move down")
-            down.set_sensitive(index < len(self.tasks) - 1)
+            down.set_sensitive(self.can_move_task(index, 1))
             down.get_style_context().add_class("reorder-button")
             down.connect("clicked", self.move_task_step, index, 1)
             row.pack_start(down, False, False, 0)
@@ -442,24 +459,109 @@ class TodoWindow(Gtk.Window):
         GLib.timeout_add(80, self.enforce_below)
 
     def move_task_step(self, _button, index, direction):
-        target = index + direction
-        if not (0 <= index < len(self.tasks) and 0 <= target < len(self.tasks)):
+        if not self.can_move_task(index, direction):
             return
-        task = self.tasks.pop(index)
-        self.tasks.insert(target, task)
+        task = self.tasks[index]
+        if task.get("level"):
+            target = index + direction
+            self.tasks[index], self.tasks[target] = self.tasks[target], self.tasks[index]
+        else:
+            end = index + 1
+            while end < len(self.tasks) and self.tasks[end].get("level"):
+                end += 1
+            block = self.tasks[index:end]
+            if direction < 0:
+                target = self.parent_before(index)
+                self.tasks[index:end] = []
+                self.tasks[target:target] = block
+            else:
+                next_end = end + 1
+                while next_end < len(self.tasks) and self.tasks[next_end].get("level"):
+                    next_end += 1
+                next_block = self.tasks[end:next_end]
+                self.tasks[index:next_end] = next_block + block
+        self.save_tasks()
+        self.render_tasks()
+
+        if APP_CONFIG["google_sync"] and self.google.authorized:
+            self.run_google(self.sync_google_positions)
+
+    def can_move_task(self, index, direction):
+        if not 0 <= index < len(self.tasks):
+            return False
+        task = self.tasks[index]
+        if task.get("level"):
+            target = index + direction
+            return (0 <= target < len(self.tasks)
+                    and bool(self.tasks[target].get("level")))
+        if direction < 0:
+            return self.parent_before(index) is not None
+        end = index + 1
+        while end < len(self.tasks) and self.tasks[end].get("level"):
+            end += 1
+        return end < len(self.tasks)
+
+    def sync_google_positions(self):
+        for index, task in enumerate(self.tasks):
+            if not task.get("google_id"):
+                continue
+            parent_id, previous_id = self.google_position(index)
+            self.google.move_task(task["google_id"], previous_id, parent_id)
+
+    def parent_before(self, index):
+        for candidate in range(index - 1, -1, -1):
+            if not self.tasks[candidate].get("level"):
+                return candidate
+        return None
+
+    def has_children(self, index):
+        return index + 1 < len(self.tasks) and bool(self.tasks[index + 1].get("level"))
+
+    def google_position(self, index):
+        task = self.tasks[index]
+        parent_id = None
+        boundary = -1
+        if task.get("level"):
+            parent_index = self.parent_before(index)
+            if parent_index is not None:
+                parent_id = self.tasks[parent_index].get("google_id")
+                boundary = parent_index
+        previous_id = None
+        for candidate in range(index - 1, boundary, -1):
+            if bool(self.tasks[candidate].get("level")) == bool(task.get("level")):
+                previous_id = self.tasks[candidate].get("google_id")
+                break
+        return parent_id, previous_id
+
+    def toggle_hierarchy(self, _button, index):
+        task = self.tasks[index]
+        if task.get("level"):
+            task["level"] = 0
+            end = index + 1
+            while end < len(self.tasks) and self.tasks[end].get("level"):
+                end += 1
+            if end > index + 1:
+                self.tasks.pop(index)
+                self.tasks.insert(end - 1, task)
+                index = end - 1
+        elif self.parent_before(index) is not None and not self.has_children(index):
+            task["level"] = 1
+        else:
+            return
         self.save_tasks()
         self.render_tasks()
         google_id = task.get("google_id")
-        previous_id = (self.tasks[target - 1].get("google_id")
-                       if target > 0 else None)
         if APP_CONFIG["google_sync"] and self.google.authorized and google_id:
-            self.run_google(lambda: self.google.move_task(google_id, previous_id))
+            parent_id, previous_id = self.google_position(index)
+            self.run_google(
+                lambda: self.google.move_task(google_id, previous_id, parent_id)
+            )
 
     def create_task(self, text):
         text = text.strip()
         if not text:
             return
-        task = {"text": text, "done": False}
+        task = {"text": text, "done": False, "level": 0}
         self.tasks.append(task)
         self.save_tasks()
         self.render_tasks()
@@ -494,7 +596,15 @@ class TodoWindow(Gtk.Window):
         if group is None:
             group = {"date": today, "tasks": []}
             self.archive.insert(0, group)
-        group["tasks"].extend(completed)
+        completed_ids = {id(task) for task in completed}
+        for index, task in enumerate(self.tasks):
+            if id(task) not in completed_ids:
+                continue
+            archived = dict(task)
+            parent_index = self.parent_before(index) if task.get("level") else None
+            if parent_index is None or id(self.tasks[parent_index]) not in completed_ids:
+                archived["level"] = 0
+            group["tasks"].append(archived)
         self.tasks = [task for task in self.tasks if not task.get("done")]
         self.save_tasks()
         self.render_tasks()
@@ -586,6 +696,10 @@ class TodoWindow(Gtk.Window):
         changed = [task for task in incoming if task.get("google_id") in old_by_id
                    and (task.get("text") != old_by_id[task["google_id"]].get("text")
                         or bool(task.get("done")) != bool(old_by_id[task["google_id"]].get("done")))]
+        hierarchy_changed = [index for index, task in enumerate(incoming)
+                             if task.get("google_id") in old_by_id
+                             and bool(task.get("level")) != bool(
+                                 old_by_id[task["google_id"]].get("level"))]
         self.tasks = incoming
         self.archive = incoming_archive
         self.save_tasks()
@@ -598,6 +712,10 @@ class TodoWindow(Gtk.Window):
                     self.google.delete_task(task_id)
                 for task in changed:
                     self.google.update_task(task["google_id"], task["text"], task["done"])
+                for index in hierarchy_changed:
+                    task = self.tasks[index]
+                    parent_id, previous_id = self.google_position(index)
+                    self.google.move_task(task["google_id"], previous_id, parent_id)
                 return self.google.merge(self.tasks, self.archived_google_ids())
             self.run_google(update_google, self.apply_google_tasks)
         return True

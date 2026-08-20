@@ -186,9 +186,12 @@ class GoogleTasks:
             if not page:
                 return items
 
-    def create_task(self, text, done=False):
+    def create_task(self, text, done=False, parent_id=None):
         body = {"title": text, "status": "completed" if done else "needsAction"}
-        return self._request("POST", f"/lists/{self.ensure_tasklist()}/tasks", json=body)
+        params = {"parent": parent_id} if parent_id else {}
+        return self._request(
+            "POST", f"/lists/{self.ensure_tasklist()}/tasks", params=params, json=body
+        )
 
     def set_done(self, task_id, done):
         body = {"status": "completed" if done else "needsAction"}
@@ -201,8 +204,10 @@ class GoogleTasks:
     def delete_task(self, task_id):
         self._request("DELETE", f"/lists/{self.ensure_tasklist()}/tasks/{task_id}")
 
-    def move_task(self, task_id, previous_id=None):
+    def move_task(self, task_id, previous_id=None, parent_id=None):
         params = {"previous": previous_id} if previous_id else {}
+        if parent_id:
+            params["parent"] = parent_id
         return self._request(
             "POST",
             f"/lists/{self.ensure_tasklist()}/tasks/{task_id}/move",
@@ -217,7 +222,10 @@ class GoogleTasks:
         by_id = {item["id"]: item for item in remote}
         claimed = set()
         merged = []
+        current_parent_id = None
         for task in local_tasks:
+            if not task.get("level"):
+                current_parent_id = None
             item = by_id.get(task.get("google_id"))
             if item is None and not task.get("google_id"):
                 item = next((candidate for candidate in remote
@@ -225,14 +233,20 @@ class GoogleTasks:
                     and candidate.get("title", "") == task.get("text", "")
                     and (candidate.get("status") == "completed") == bool(task.get("done"))), None)
             if item is None:
-                item = self.create_task(task.get("text", ""), bool(task.get("done")))
+                item = self.create_task(
+                    task.get("text", ""), bool(task.get("done")), current_parent_id
+                )
             claimed.add(item["id"])
             merged.append({"text": item.get("title", ""),
                            "done": item.get("status") == "completed",
-                           "google_id": item["id"]})
+                           "google_id": item["id"],
+                           "level": 1 if item.get("parent") else int(bool(task.get("level")))})
+            if not task.get("level"):
+                current_parent_id = item["id"]
         for item in remote:
             if item["id"] not in claimed:
                 merged.append({"text": item.get("title", ""),
                                "done": item.get("status") == "completed",
-                               "google_id": item["id"]})
+                               "google_id": item["id"],
+                               "level": 1 if item.get("parent") else 0})
         return merged

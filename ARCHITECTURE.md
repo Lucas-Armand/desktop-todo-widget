@@ -22,6 +22,11 @@ A task has `text`, `done`, and optionally `google_id`. Remote IDs are stored in
 HTML comments on their Markdown lines, which keeps the note readable in
 Obsidian. A small JSON file mirrors the current state for recovery.
 
+`level` is either `0` (top-level task/topic) or `1` (subtask/subtopic). The
+Markdown representation uses two leading spaces, while Google Tasks uses its
+official `parent` relationship. The UI intentionally supports one level to stay
+compact even though the API permits much larger subtask collections.
+
 Completed tasks remain active until the user archives them. Archiving moves
 them under `# DONE:` and a `## DD_MM_YYYY` heading. Archived remote IDs are
 excluded from subsequent merges so completed Google Tasks do not reappear.

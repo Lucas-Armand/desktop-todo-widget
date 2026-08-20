@@ -12,12 +12,14 @@ class FakeGoogleTasks(GoogleTasks):
     def list_tasks(self):
         return list(self.remote)
 
-    def create_task(self, text, done=False):
+    def create_task(self, text, done=False, parent_id=None):
         item = {
             "id": f"new-{len(self.created) + 1}",
             "title": text,
             "status": "completed" if done else "needsAction",
         }
+        if parent_id:
+            item["parent"] = parent_id
         self.created.append(item)
         return item
 
@@ -43,7 +45,8 @@ class MergeTests(unittest.TestCase):
         ])
         merged = client.merge([])
         self.assertEqual(
-            [{"text": "From phone", "done": True, "google_id": "remote-1"}],
+            [{"text": "From phone", "done": True, "google_id": "remote-1",
+              "level": 0}],
             merged,
         )
 
@@ -52,6 +55,16 @@ class MergeTests(unittest.TestCase):
             {"id": "archived-1", "title": "Already done", "status": "completed"}
         ])
         self.assertEqual([], client.merge([], {"archived-1"}))
+
+    def test_creates_subtask_under_previous_top_level_task(self):
+        client = FakeGoogleTasks([])
+        merged = client.merge([
+            {"text": "Topic", "done": False, "level": 0},
+            {"text": "Subtopic", "done": False, "level": 1},
+        ])
+        self.assertEqual(0, merged[0]["level"])
+        self.assertEqual(1, merged[1]["level"])
+        self.assertEqual("new-1", client.created[1]["parent"])
 
 
 if __name__ == "__main__":

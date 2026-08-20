@@ -14,7 +14,7 @@ sync with a dedicated Google Tasks list.
 
 ## What it includes
 
-- clickable add, complete, delete, archive, and reorder controls;
+- clickable add, complete, delete, archive, hierarchy, and reorder controls;
 - configurable position and maximum width, with wrapping for long tasks;
 - a dedicated Markdown note as the local source;
 - optional two-way Google Tasks synchronization;
@@ -83,6 +83,7 @@ which Obsidian hides in Reading view:
 
 ```markdown
 - [ ] Prepare the presentation <!-- google-task:REMOTE_ID -->
+  - [ ] Draft the slides <!-- google-task:CHILD_REMOTE_ID -->
 
 # DONE:
 
@@ -93,6 +94,11 @@ which Obsidian hides in Reading view:
 `Archive completed` moves checked tasks out of the active list and into the
 current `DD_MM_YYYY` section under `# DONE:`. It does not delete their completed
 Google Tasks. The `×` control remains the explicit permanent-delete action.
+
+Use `↳` to make a task a subtask of the closest preceding top-level task, and
+`←` to return it to the top level. Parent tasks move together with their
+subtasks. The same hierarchy is represented by two-space Markdown indentation
+and the official Google Tasks `parent` relationship.
 
 ## Optional Google Tasks sync
 
