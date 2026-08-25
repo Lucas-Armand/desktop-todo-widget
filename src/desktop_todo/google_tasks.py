@@ -27,6 +27,10 @@ class GoogleTasksError(RuntimeError):
     pass
 
 
+class GoogleAuthorizationExpired(GoogleTasksError):
+    pass
+
+
 class GoogleTasks:
     def __init__(self, list_name="Desktop Todo"):
         self.list_name = list_name
@@ -137,6 +141,13 @@ class GoogleTasks:
             "refresh_token": token.get("refresh_token"),
             "grant_type": "refresh_token",
         }, timeout=30)
+        try:
+            oauth_error = response.json().get("error") if not response.ok else None
+        except (ValueError, AttributeError):
+            oauth_error = None
+        if oauth_error == "invalid_grant":
+            TOKEN_FILE.unlink(missing_ok=True)
+            raise GoogleAuthorizationExpired("Google authorization expired")
         self._check(response)
         refreshed = response.json()
         token.update(refreshed)
@@ -149,7 +160,9 @@ class GoogleTasks:
         if response.ok:
             return
         try:
-            message = response.json().get("error", {}).get("message") or response.text
+            error = response.json().get("error", {})
+            message = (error.get("message") if isinstance(error, dict) else error)
+            message = message or response.text
         except (ValueError, AttributeError):
             message = response.text
         raise GoogleTasksError(f"Google returned {response.status_code}: {message[:180]}")

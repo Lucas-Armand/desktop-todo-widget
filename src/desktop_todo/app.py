@@ -12,7 +12,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Gdk, GLib, Gtk, Pango
-from .google_tasks import GoogleTasks
+from .google_tasks import GoogleAuthorizationExpired, GoogleTasks
 
 
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "desktop-todo"
@@ -620,9 +620,17 @@ class TodoWindow(Gtk.Window):
                 if success:
                     GLib.idle_add(success, result)
                 GLib.idle_add(self.set_sync_status, "Google Tasks synced")
+            except GoogleAuthorizationExpired:
+                GLib.idle_add(self.authorization_expired)
             except Exception as exc:
                 GLib.idle_add(self.set_sync_status, "Error: " + str(exc)[:90])
         threading.Thread(target=worker, daemon=True).start()
+
+    def authorization_expired(self):
+        self.syncing = False
+        self.sync_status.set_text("Google authorization expired — click ⟳ to reconnect")
+        self.sync_button.set_tooltip_text("Reconnect Google Tasks")
+        return False
 
     def attach_google_id(self, task, item):
         task["google_id"] = item["id"]
@@ -652,6 +660,8 @@ class TodoWindow(Gtk.Window):
             try:
                 tasks = self.google.merge(self.tasks, self.archived_google_ids())
                 GLib.idle_add(self.apply_google_tasks, tasks)
+            except GoogleAuthorizationExpired:
+                GLib.idle_add(self.authorization_expired)
             except Exception as exc:
                 GLib.idle_add(self.sync_failed, exc)
         threading.Thread(target=worker, daemon=True).start()

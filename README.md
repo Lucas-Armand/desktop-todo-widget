@@ -109,6 +109,11 @@ password is handled by the widget.
 Follow [the complete Google Tasks setup](docs/google-tasks-setup.md), including
 the Testing-mode test-user step that prevents `403 access_denied`.
 
+Google expires refresh tokens after seven days while an external OAuth app
+remains in Testing. When that happens, the widget removes only the invalid token
+and displays a reconnect message; click `⟳` to authorize again. Markdown and
+local task data are not removed.
+
 Google Tasks is used because it provides an official read/write API. Google
 Keep does not provide the suitable personal checklist workflow; the tradeoff is
 explained in [Why not Google Keep?](docs/why-not-google-keep.md).

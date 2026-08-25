@@ -97,6 +97,8 @@ use a dedicated list rather than the default `My Tasks` list.
 
 ### Authorization stops working after testing
 
-Testing-mode OAuth policies can affect refresh-token lifetime. Reauthorize or
-review the current Google Auth Platform publishing settings. Do not bypass this
-by storing a Google password or browser cookies.
+For an external OAuth app in Testing, Google expires the authorization and its
+refresh token after seven days. The widget detects `invalid_grant`, removes only
+that unusable token, and asks you to click `⟳` to reconnect. Reauthorize or
+complete Google's current production and verification requirements. Do not
+bypass this by storing a Google password or browser cookies.
