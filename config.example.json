@@ -7,5 +7,6 @@
   "max_width": 350,
   "font_size": 14,
   "color_theme": "original",
-  "background_opacity": 78
+  "background_opacity": 78,
+  "light_checkboxes": false
 }

@@ -32,6 +32,7 @@ def read_config():
         "font_size": 14,
         "color_theme": "original",
         "background_opacity": 78,
+        "light_checkboxes": False,
     }
     try:
         loaded = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -233,9 +234,10 @@ class TodoWindow(Gtk.Window):
     def load_settings():
         defaults = {"x": APP_CONFIG["x"], "y": APP_CONFIG["y"],
                     "max_width": APP_CONFIG["max_width"],
-                    "font_size": 14, "color_theme": "original", "background_opacity": 78}
+                    "font_size": 14, "color_theme": "original", "background_opacity": 78, "light_checkboxes": False}
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            defaults["light_checkboxes"] = data.get("light_checkboxes") is True
             defaults["background_opacity"] = max(0, min(100, int(data.get("background_opacity", 78))))
             if data.get("color_theme") in PALETTES:
                 defaults["color_theme"] = data["color_theme"]
@@ -258,8 +260,15 @@ class TodoWindow(Gtk.Window):
             " border: 2px solid #e1e8f5; border-radius: 4px; background: #242830; -gtk-icon-shadow: none; }"
             "#widget-settings check:checked { background: #8ab4f8; border-color: #8ab4f8; color: #172030; }"
         )
+        if self.settings["light_checkboxes"]:
+            settings_css += (
+                "#todo-widget .task-check check { background: #f5f6fa;"
+                " border: 1px solid #9aa0a6; color: #20242d; -gtk-icon-shadow: none; }"
+                "#todo-widget .task-check check:hover { background: #ffffff; border-color: #8ab4f8; }"
+                "#todo-widget .task-check check:checked { background: #f5f6fa; color: #20242d; }"
+            )
         if self.settings["color_theme"] == "original":
-            # No widget overrides: retain the original upstream CSS and GTK theme.
+            # Retain upstream styling, except the optional checkbox override.
             self.appearance_provider.load_from_data(settings_css.encode())
             return
         size = self.settings["font_size"]
@@ -334,13 +343,18 @@ class TodoWindow(Gtk.Window):
         theme.connect("changed", update_theme_controls)
         update_theme_controls()
         theme.set_tooltip_text("Original restores the initial widget styling, including system-themed checkboxes. Width is kept.")
+        light_checkboxes = Gtk.CheckButton(label="Light checkbox backgrounds")
+        light_checkboxes.set_active(self.settings["light_checkboxes"])
+        light_checkboxes.set_tooltip_text("Use light task checkboxes with any theme, including Original.")
+        grid.attach(light_checkboxes, 0, 5, 2, 1)
         error = Gtk.Label(xalign=0, wrap=True)
-        grid.attach(error, 0, 5, 2, 1)
+        grid.attach(error, 0, 6, 2, 1)
 
         def respond(_dialog, response):
             if response == Gtk.ResponseType.APPLY:
                 changes = {"font_size": font.get_value_as_int(),
                            "color_theme": theme.get_active_id(),
+                           "light_checkboxes": light_checkboxes.get_active(),
                            "background_opacity": round(opacity.get_value()),
                            "max_width": None if automatic.get_active() else width.get_value_as_int()}
                 try:

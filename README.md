@@ -65,7 +65,8 @@ from [config.example.json](config.example.json):
   "max_width": 350,
   "font_size": 14,
   "color_theme": "original",
-  "background_opacity": 78
+  "background_opacity": 78,
+  "light_checkboxes": false
 }
 ```
 
@@ -75,7 +76,9 @@ color theme. **Original (default)** restores the initial upstream appearance,
 including original fonts, translucent background, button colors and system-themed
 checkboxes. It keeps your configured width and disables custom font/opacity
 controls; select another theme to customize them. Older configurations without a
-color theme use Original automatically. Background opacity can be set from 0% (transparent) to 100% (opaque),
+color theme use Original automatically. Enable **Light checkbox backgrounds**
+to give task checkboxes a light fill with a dark checkmark, including in Original,
+without changing other styling. This option is off by default. Background opacity can be set from 0% (transparent) to 100% (opaque),
 with a default of 78%. Text and checkboxes retain their contrast. Transparency
 requires a compositing desktop. Checkboxes have explicit high-contrast borders in the widget and settings. Apply saves these preferences and
 updates the widget immediately without changing tasks or synchronization settings.
