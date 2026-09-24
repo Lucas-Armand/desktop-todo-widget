@@ -30,6 +30,7 @@ def read_config():
         "y": 72,
         "max_width": 350,
         "font_size": 14,
+        "color_theme": "blue",
     }
     try:
         loaded = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -47,6 +48,14 @@ TASK_LINE = re.compile(
 )
 DONE_HEADING = re.compile(r"^#\s+DONE:?\s*$", re.IGNORECASE)
 DATE_HEADING = re.compile(r"^##\s+(.+?)\s*$")
+
+
+PALETTES = {
+    "blue": ("Midnight blue", "#181a1f", "#f1f3f4", "#8ab4f8"),
+    "green": ("Forest green", "#17251e", "#eef8f0", "#8cdeb0"),
+    "purple": ("Deep purple", "#251d30", "#f5efff", "#ceb0ff"),
+    "light": ("Light", "#f5f6fa", "#20242d", "#315da8"),
+}
 
 
 CSS = b"""
@@ -222,9 +231,11 @@ class TodoWindow(Gtk.Window):
     def load_settings():
         defaults = {"x": APP_CONFIG["x"], "y": APP_CONFIG["y"],
                     "max_width": APP_CONFIG["max_width"],
-                    "font_size": 14}
+                    "font_size": 14, "color_theme": "blue"}
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            if data.get("color_theme") in PALETTES:
+                defaults["color_theme"] = data["color_theme"]
             defaults["font_size"] = max(10, min(24, int(data.get("font_size", 14))))
             defaults.update({key: int(data[key]) for key in ("x", "y") if key in data})
             if "max_width" in data:
@@ -236,7 +247,27 @@ class TodoWindow(Gtk.Window):
 
     def apply_appearance(self):
         size = self.settings["font_size"]
+        _, background, foreground, accent = PALETTES[self.settings["color_theme"]]
         self.appearance_provider.load_from_data((
+            f"#todo-widget #panel {{ background: {background}; border-color: {accent}; }}"
+            f"#todo-widget label {{ color: {foreground}; }}"
+            f"#todo-widget #title {{ color: {accent}; }}"
+            f"#todo-widget button {{ background: {background}; color: {foreground}; border-color: {accent}; }}"
+            f"#todo-widget button:hover {{ background: alpha({accent}, 0.2); }}"
+            f"#todo-widget button:disabled label {{ color: alpha({foreground}, 0.4); }}"
+            f"#todo-widget .task-check.completed label {{ color: alpha({foreground}, 0.65); }}"
+            f"#todo-widget check {{ min-width: 16px; min-height: 16px; border: 2px solid {foreground};"
+            f" border-radius: 4px; background: {background}; -gtk-icon-shadow: none; }}"
+            f"#todo-widget check:checked {{ background: {accent}; border-color: {accent}; color: {background}; }}"
+            f"#todo-widget check:hover {{ border-color: {accent}; }}"
+            "#widget-settings { background: #242830; color: #f1f3f4; }"
+            "#widget-settings label { color: #f1f3f4; }"
+            "#widget-settings button, #widget-settings spinbutton, #widget-settings entry {"
+            " background: #343b48; color: #f1f3f4; }"
+            "#widget-settings check { min-width: 16px; min-height: 16px;"
+            " border: 2px solid #e1e8f5; border-radius: 4px; background: #242830; -gtk-icon-shadow: none; }"
+            "#widget-settings check:checked { background: #8ab4f8; border-color: #8ab4f8; color: #172030; }"
+
             f"#todo-widget label, #todo-widget button {{ font-size: {size}px; }}"
             f"#todo-widget .task-check {{ font-size: {size}px; }}"
             f"#todo-widget #title {{ font-size: {size + 6}px; }}"
@@ -247,6 +278,7 @@ class TodoWindow(Gtk.Window):
             self.settings_window.present()
             return
         dialog = Gtk.Dialog(title="Widget settings", transient_for=self, modal=True)
+        dialog.set_name("widget-settings")
         self.settings_window = dialog
         dialog.set_keep_above(True)
         dialog.set_accept_focus(True)
@@ -267,12 +299,19 @@ class TodoWindow(Gtk.Window):
         grid.attach(Gtk.Label(label="Maximum width (px)", xalign=0), 0, 1, 1, 1)
         grid.attach(width, 1, 1, 1, 1)
         grid.attach(automatic, 0, 2, 2, 1)
+        theme = Gtk.ComboBoxText()
+        for key, (name, *_colors) in PALETTES.items():
+            theme.append(key, name)
+        theme.set_active_id(self.settings["color_theme"])
+        grid.attach(Gtk.Label(label="Colors", xalign=0), 0, 3, 1, 1)
+        grid.attach(theme, 1, 3, 1, 1)
         error = Gtk.Label(xalign=0, wrap=True)
-        grid.attach(error, 0, 3, 2, 1)
+        grid.attach(error, 0, 4, 2, 1)
 
         def respond(_dialog, response):
             if response == Gtk.ResponseType.APPLY:
                 changes = {"font_size": font.get_value_as_int(),
+                           "color_theme": theme.get_active_id(),
                            "max_width": None if automatic.get_active() else width.get_value_as_int()}
                 try:
                     # Read the latest config so sync and file paths are preserved.
