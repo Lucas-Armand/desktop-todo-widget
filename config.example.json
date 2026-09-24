@@ -4,5 +4,6 @@
   "google_task_list": "Desktop Todo",
   "x": 88,
   "y": 72,
-  "max_width": 350
+  "max_width": 350,
+  "font_size": 14
 }

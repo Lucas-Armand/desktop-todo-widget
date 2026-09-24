@@ -29,6 +29,7 @@ def read_config():
         "x": 88,
         "y": 72,
         "max_width": 350,
+        "font_size": 14,
     }
     try:
         loaded = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -108,6 +109,7 @@ class TodoWindow(Gtk.Window):
         self.google = GoogleTasks(APP_CONFIG["google_task_list"])
         self.syncing = False
         self.editor_window = None
+        self.settings_window = None
         self.archive = self.read_archive()
         self.tasks = self.load_tasks()
         self.markdown_mtime = self.markdown_timestamp()
@@ -127,6 +129,13 @@ class TodoWindow(Gtk.Window):
             self.set_visual(visual)
         self.set_app_paintable(True)
 
+        self.set_name("todo-widget")
+        self.appearance_provider = Gtk.CssProvider()
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, self.appearance_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
+        )
+        self.apply_appearance()
+
         provider = Gtk.CssProvider()
         provider.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(
@@ -143,6 +152,10 @@ class TodoWindow(Gtk.Window):
         title.set_name("title")
         title.set_hexpand(True)
         header.pack_start(title, True, True, 0)
+        settings_button = Gtk.Button.new_from_icon_name("preferences-system-symbolic", Gtk.IconSize.BUTTON)
+        settings_button.set_tooltip_text("Settings")
+        settings_button.connect("clicked", self.show_settings)
+        header.pack_start(settings_button, False, False, 0)
         self.sync_button = Gtk.Button(label="⟳")
         self.sync_button.get_style_context().add_class("sync-button")
         self.sync_button.set_tooltip_text("Connect or sync Google Tasks")
@@ -208,9 +221,11 @@ class TodoWindow(Gtk.Window):
     @staticmethod
     def load_settings():
         defaults = {"x": APP_CONFIG["x"], "y": APP_CONFIG["y"],
-                    "max_width": APP_CONFIG["max_width"]}
+                    "max_width": APP_CONFIG["max_width"],
+                    "font_size": 14}
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            defaults["font_size"] = max(10, min(24, int(data.get("font_size", 14))))
             defaults.update({key: int(data[key]) for key in ("x", "y") if key in data})
             if "max_width" in data:
                 defaults["max_width"] = (None if data["max_width"] is None
@@ -218,6 +233,67 @@ class TodoWindow(Gtk.Window):
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             pass
         return defaults
+
+    def apply_appearance(self):
+        size = self.settings["font_size"]
+        self.appearance_provider.load_from_data((
+            f"#todo-widget label, #todo-widget button {{ font-size: {size}px; }}"
+            f"#todo-widget .task-check {{ font-size: {size}px; }}"
+            f"#todo-widget #title {{ font-size: {size + 6}px; }}"
+        ).encode())
+
+    def show_settings(self, _button=None):
+        if self.settings_window is not None:
+            self.settings_window.present()
+            return
+        dialog = Gtk.Dialog(title="Widget settings", transient_for=self, modal=True)
+        self.settings_window = dialog
+        dialog.set_keep_above(True)
+        dialog.set_accept_focus(True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Apply", Gtk.ResponseType.APPLY)
+        grid = Gtk.Grid(column_spacing=16, row_spacing=12, margin=18)
+        dialog.get_content_area().add(grid)
+        font = Gtk.SpinButton.new_with_range(10, 24, 1)
+        font.set_value(self.settings["font_size"])
+        width = Gtk.SpinButton.new_with_range(280, 1200, 10)
+        width.set_value(self.settings["max_width"] or 350)
+        automatic = Gtk.CheckButton(label="Automatic width")
+        automatic.set_active(self.settings["max_width"] is None)
+        width.set_sensitive(not automatic.get_active())
+        automatic.connect("toggled", lambda button: width.set_sensitive(not button.get_active()))
+        grid.attach(Gtk.Label(label="Text size (px)", xalign=0), 0, 0, 1, 1)
+        grid.attach(font, 1, 0, 1, 1)
+        grid.attach(Gtk.Label(label="Maximum width (px)", xalign=0), 0, 1, 1, 1)
+        grid.attach(width, 1, 1, 1, 1)
+        grid.attach(automatic, 0, 2, 2, 1)
+        error = Gtk.Label(xalign=0, wrap=True)
+        grid.attach(error, 0, 3, 2, 1)
+
+        def respond(_dialog, response):
+            if response == Gtk.ResponseType.APPLY:
+                changes = {"font_size": font.get_value_as_int(),
+                           "max_width": None if automatic.get_active() else width.get_value_as_int()}
+                try:
+                    # Read the latest config so sync and file paths are preserved.
+                    config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+                    config.update(changes)
+                    temporary = CONFIG_FILE.with_suffix(".tmp")
+                    temporary.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+                    temporary.replace(CONFIG_FILE)
+                except (OSError, ValueError, AttributeError) as exc:
+                    error.set_text("Could not save settings: " + str(exc))
+                    return
+                self.settings.update(changes)
+                self.apply_appearance()
+                self.render_tasks()
+                self.resize(self.settings["max_width"] or 350, 1)
+            dialog.destroy()
+
+        dialog.connect("response", respond)
+        dialog.connect("destroy", lambda *_: setattr(self, "settings_window", None))
+        dialog.show_all()
+        dialog.present()
 
     def write_tasks(self, tasks):
         DATA_DIR.mkdir(parents=True, exist_ok=True)

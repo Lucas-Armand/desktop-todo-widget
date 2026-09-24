@@ -62,11 +62,16 @@ from [config.example.json](config.example.json):
   "google_task_list": "Desktop Todo",
   "x": 88,
   "y": 72,
-  "max_width": 350
+  "max_width": 350,
+  "font_size": 14
 }
 ```
 
-Restart the widget after editing configuration. Set `max_width` to `null` for
+Click the settings button in the header to adjust text size (10–24 px) and
+maximum width, or enable automatic width. Apply saves these preferences and
+updates the widget immediately without changing tasks or synchronization settings.
+
+Restart the widget after editing configuration manually. Set `max_width` to `null` for
 automatic width.
 
 ### Use an Obsidian note
