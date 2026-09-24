@@ -64,14 +64,18 @@ from [config.example.json](config.example.json):
   "y": 72,
   "max_width": 350,
   "font_size": 14,
-  "color_theme": "blue",
+  "color_theme": "original",
   "background_opacity": 78
 }
 ```
 
 Click the settings button in the header to adjust text size (10–24 px) and
 maximum width, or enable automatic width. Choose a blue, green, purple, or light
-color theme. Background opacity can be set from 0% (transparent) to 100% (opaque),
+color theme. **Original (default)** restores the initial upstream appearance,
+including original fonts, translucent background, button colors and system-themed
+checkboxes. It keeps your configured width and disables custom font/opacity
+controls; select another theme to customize them. Older configurations without a
+color theme use Original automatically. Background opacity can be set from 0% (transparent) to 100% (opaque),
 with a default of 78%. Text and checkboxes retain their contrast. Transparency
 requires a compositing desktop. Checkboxes have explicit high-contrast borders in the widget and settings. Apply saves these preferences and
 updates the widget immediately without changing tasks or synchronization settings.

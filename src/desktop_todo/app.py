@@ -30,7 +30,7 @@ def read_config():
         "y": 72,
         "max_width": 350,
         "font_size": 14,
-        "color_theme": "blue",
+        "color_theme": "original",
         "background_opacity": 78,
     }
     try:
@@ -52,6 +52,7 @@ DATE_HEADING = re.compile(r"^##\s+(.+?)\s*$")
 
 
 PALETTES = {
+    "original": ("Original (default)", "#181a1f", "#ffffff", "#8ab4f8"),
     "blue": ("Midnight blue", "#181a1f", "#f1f3f4", "#8ab4f8"),
     "green": ("Forest green", "#17251e", "#eef8f0", "#8cdeb0"),
     "purple": ("Deep purple", "#251d30", "#f5efff", "#ceb0ff"),
@@ -232,7 +233,7 @@ class TodoWindow(Gtk.Window):
     def load_settings():
         defaults = {"x": APP_CONFIG["x"], "y": APP_CONFIG["y"],
                     "max_width": APP_CONFIG["max_width"],
-                    "font_size": 14, "color_theme": "blue", "background_opacity": 78}
+                    "font_size": 14, "color_theme": "original", "background_opacity": 78}
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             defaults["background_opacity"] = max(0, min(100, int(data.get("background_opacity", 78))))
@@ -248,6 +249,19 @@ class TodoWindow(Gtk.Window):
         return defaults
 
     def apply_appearance(self):
+        settings_css = (
+            "#widget-settings { background: #242830; color: #f1f3f4; }"
+            "#widget-settings label { color: #f1f3f4; }"
+            "#widget-settings button, #widget-settings spinbutton, #widget-settings entry {"
+            " background: #343b48; color: #f1f3f4; }"
+            "#widget-settings check { min-width: 16px; min-height: 16px;"
+            " border: 2px solid #e1e8f5; border-radius: 4px; background: #242830; -gtk-icon-shadow: none; }"
+            "#widget-settings check:checked { background: #8ab4f8; border-color: #8ab4f8; color: #172030; }"
+        )
+        if self.settings["color_theme"] == "original":
+            # No widget overrides: retain the original upstream CSS and GTK theme.
+            self.appearance_provider.load_from_data(settings_css.encode())
+            return
         size = self.settings["font_size"]
         _, background, foreground, accent = PALETTES[self.settings["color_theme"]]
         opacity = self.settings["background_opacity"] / 100
@@ -263,18 +277,12 @@ class TodoWindow(Gtk.Window):
             f" border-radius: 4px; background: {background}; -gtk-icon-shadow: none; }}"
             f"#todo-widget check:checked {{ background: {accent}; border-color: {accent}; color: {background}; }}"
             f"#todo-widget check:hover {{ border-color: {accent}; }}"
-            "#widget-settings { background: #242830; color: #f1f3f4; }"
-            "#widget-settings label { color: #f1f3f4; }"
-            "#widget-settings button, #widget-settings spinbutton, #widget-settings entry {"
-            " background: #343b48; color: #f1f3f4; }"
-            "#widget-settings check { min-width: 16px; min-height: 16px;"
-            " border: 2px solid #e1e8f5; border-radius: 4px; background: #242830; -gtk-icon-shadow: none; }"
-            "#widget-settings check:checked { background: #8ab4f8; border-color: #8ab4f8; color: #172030; }"
+
 
             f"#todo-widget label, #todo-widget button {{ font-size: {size}px; }}"
             f"#todo-widget .task-check {{ font-size: {size}px; }}"
             f"#todo-widget #title {{ font-size: {size + 6}px; }}"
-        ).encode())
+        + settings_css).encode())
 
     def show_settings(self, _button=None):
         if self.settings_window is not None:
@@ -315,6 +323,17 @@ class TodoWindow(Gtk.Window):
         opacity.set_tooltip_text("0%: transparent background; 100%: opaque. Text and checkboxes stay visible.")
         grid.attach(Gtk.Label(label="Background opacity (%)", xalign=0), 0, 4, 1, 1)
         grid.attach(opacity, 1, 4, 1, 1)
+        def update_theme_controls(_combo=None):
+            original = theme.get_active_id() == "original"
+            font.set_sensitive(not original)
+            opacity.set_sensitive(not original)
+            if original:
+                font.set_value(14)
+                opacity.set_value(78)
+
+        theme.connect("changed", update_theme_controls)
+        update_theme_controls()
+        theme.set_tooltip_text("Original restores the initial widget styling, including system-themed checkboxes. Width is kept.")
         error = Gtk.Label(xalign=0, wrap=True)
         grid.attach(error, 0, 5, 2, 1)
 

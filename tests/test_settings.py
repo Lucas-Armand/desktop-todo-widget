@@ -59,6 +59,22 @@ class SettingsTests(unittest.TestCase):
                     dialog.response(app.Gtk.ResponseType.CANCEL)
                     self.assertEqual(json.loads(config.read_text())['font_size'], 12)
                     self.assertEqual(note.read_bytes(), original)
+                    window.show_settings()
+                    dialog = window.settings_window
+                    grid = dialog.get_content_area().get_children()[0]
+                    grid.get_child_at(1, 3).set_active_id("original")
+                    self.assertFalse(grid.get_child_at(1, 0).get_sensitive())
+                    self.assertFalse(grid.get_child_at(1, 4).get_sensitive())
+                    dialog.response(app.Gtk.ResponseType.APPLY)
+                    restored = json.loads(config.read_text())
+                    self.assertEqual(restored["color_theme"], "original")
+                    self.assertEqual(restored["font_size"], 14)
+                    self.assertEqual(restored["background_opacity"], 78)
+                    self.assertNotIn(b"#todo-widget", window.appearance_provider.to_string().encode())
+                    self.assertEqual(note.read_bytes(), original)
+                    restored.pop("color_theme")
+                    config.write_text(json.dumps(restored))
+                    self.assertEqual(app.TodoWindow.load_settings()["color_theme"], "original")
                 finally:
                     window.disconnect_by_func(app.Gtk.main_quit)
                     window.destroy()
