@@ -64,13 +64,16 @@ from [config.example.json](config.example.json):
   "y": 72,
   "max_width": 350,
   "font_size": 14,
-  "color_theme": "blue"
+  "color_theme": "blue",
+  "background_opacity": 78
 }
 ```
 
 Click the settings button in the header to adjust text size (10–24 px) and
 maximum width, or enable automatic width. Choose a blue, green, purple, or light
-color theme. Checkboxes have explicit high-contrast borders in the widget and settings. Apply saves these preferences and
+color theme. Background opacity can be set from 0% (transparent) to 100% (opaque),
+with a default of 78%. Text and checkboxes retain their contrast. Transparency
+requires a compositing desktop. Checkboxes have explicit high-contrast borders in the widget and settings. Apply saves these preferences and
 updates the widget immediately without changing tasks or synchronization settings.
 
 Restart the widget after editing configuration manually. Set `max_width` to `null` for

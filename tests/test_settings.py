@@ -30,19 +30,23 @@ class SettingsTests(unittest.TestCase):
                     grid.get_child_at(1, 0).set_value(12)
                     grid.get_child_at(1, 1).set_value(400)
                     grid.get_child_at(1, 3).set_active_id("green")
+                    grid.get_child_at(1, 4).set_value(55)
                     # Simulate an external config update while the dialog is open.
                     current = json.loads(config.read_text())
                     current['google_task_list'] = 'Preserved list'
                     config.write_text(json.dumps(current))
                     dialog.response(app.Gtk.ResponseType.APPLY)
                     saved = json.loads(config.read_text())
-                    self.assertEqual(saved, dict(current, font_size=12, max_width=400, color_theme="green"))
+                    self.assertEqual(saved, dict(current, font_size=12, max_width=400, color_theme="green", background_opacity=55))
                     self.assertEqual(note.read_bytes(), original)
                     self.assertEqual(window.settings['font_size'], 12)
                     self.assertEqual(app.TodoWindow.load_settings()["color_theme"], "green")
+                    self.assertEqual(app.TodoWindow.load_settings()["background_opacity"], 55)
                     for theme_name in app.PALETTES:
                         window.settings["color_theme"] = theme_name
-                        window.apply_appearance()
+                        for opacity in (0, 55, 100):
+                            window.settings["background_opacity"] = opacity
+                            window.apply_appearance()
                     self.assertIsNone(window.settings_window)
                     window.show_settings()
                     dialog = window.settings_window

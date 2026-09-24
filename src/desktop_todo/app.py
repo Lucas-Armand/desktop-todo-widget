@@ -31,6 +31,7 @@ def read_config():
         "max_width": 350,
         "font_size": 14,
         "color_theme": "blue",
+        "background_opacity": 78,
     }
     try:
         loaded = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -231,9 +232,10 @@ class TodoWindow(Gtk.Window):
     def load_settings():
         defaults = {"x": APP_CONFIG["x"], "y": APP_CONFIG["y"],
                     "max_width": APP_CONFIG["max_width"],
-                    "font_size": 14, "color_theme": "blue"}
+                    "font_size": 14, "color_theme": "blue", "background_opacity": 78}
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            defaults["background_opacity"] = max(0, min(100, int(data.get("background_opacity", 78))))
             if data.get("color_theme") in PALETTES:
                 defaults["color_theme"] = data["color_theme"]
             defaults["font_size"] = max(10, min(24, int(data.get("font_size", 14))))
@@ -248,11 +250,12 @@ class TodoWindow(Gtk.Window):
     def apply_appearance(self):
         size = self.settings["font_size"]
         _, background, foreground, accent = PALETTES[self.settings["color_theme"]]
+        opacity = self.settings["background_opacity"] / 100
         self.appearance_provider.load_from_data((
-            f"#todo-widget #panel {{ background: {background}; border-color: {accent}; }}"
+            f"#todo-widget #panel {{ background: alpha({background}, {opacity}); border-color: {accent}; }}"
             f"#todo-widget label {{ color: {foreground}; }}"
             f"#todo-widget #title {{ color: {accent}; }}"
-            f"#todo-widget button {{ background: {background}; color: {foreground}; border-color: {accent}; }}"
+            f"#todo-widget button {{ background: transparent; color: {foreground}; border-color: {accent}; }}"
             f"#todo-widget button:hover {{ background: alpha({accent}, 0.2); }}"
             f"#todo-widget button:disabled label {{ color: alpha({foreground}, 0.4); }}"
             f"#todo-widget .task-check.completed label {{ color: alpha({foreground}, 0.65); }}"
@@ -305,13 +308,21 @@ class TodoWindow(Gtk.Window):
         theme.set_active_id(self.settings["color_theme"])
         grid.attach(Gtk.Label(label="Colors", xalign=0), 0, 3, 1, 1)
         grid.attach(theme, 1, 3, 1, 1)
+        opacity = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        opacity.set_digits(0)
+        opacity.set_value(self.settings["background_opacity"])
+        opacity.set_size_request(180, -1)
+        opacity.set_tooltip_text("0%: transparent background; 100%: opaque. Text and checkboxes stay visible.")
+        grid.attach(Gtk.Label(label="Background opacity (%)", xalign=0), 0, 4, 1, 1)
+        grid.attach(opacity, 1, 4, 1, 1)
         error = Gtk.Label(xalign=0, wrap=True)
-        grid.attach(error, 0, 4, 2, 1)
+        grid.attach(error, 0, 5, 2, 1)
 
         def respond(_dialog, response):
             if response == Gtk.ResponseType.APPLY:
                 changes = {"font_size": font.get_value_as_int(),
                            "color_theme": theme.get_active_id(),
+                           "background_opacity": round(opacity.get_value()),
                            "max_width": None if automatic.get_active() else width.get_value_as_int()}
                 try:
                     # Read the latest config so sync and file paths are preserved.
